@@ -1,0 +1,112 @@
+---
+title: "Reliability (Survival) Analysis"
+output: 
+  flexdashboard::flex_dashboard:
+runtime: shiny
+---
+
+
+```{r global, include=FALSE}
+
+options(stringsAsFactors=FALSE)
+while(dev.next()>1) dev.off()
+rm(list=objects())
+gc()
+
+libs <- c("shiny", "MASS", "survival")
+x <- sapply(libs, function(x) {if(!require(x, character.only = T)) install.packages(x)})
+x <- sapply(libs, function(x) {require(x, character.only = T)})
+
+setwd("C:/MyDesktop/_My Reference/_My Notes")
+set.seed(1000)
+
+```
+
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+sliderInput("weibull_shape", label = "Ground Truth: weibull_shape",
+            min = 1, max = 10, value = 2, step = 1)
+
+sliderInput("weibull_scale", label = "Ground Truth: weibull_scale",
+            min = 10, max = 200, value = 100, step = 10)
+
+sliderInput("n", label = "Sample Size",
+            min = 5, max = 200, value = 50, step = 5)
+
+sliderInput("cut", label = "Study Complete Time",
+            min = 50, max = 1000, value = 500, step = 50)
+
+```
+
+
+
+Column
+-----------------------------------------------------------------------
+
+```{r}
+
+renderPlot({
+  
+  weibull_shape <- input$weibull_shape
+  weibull_scale <- input$weibull_scale
+  n <- input$n
+  cut <- input$cut
+  
+  data <- data.frame(true_duration = rweibull(n, shape = weibull_shape, scale = weibull_scale))
+  data$start <- mapply(function(x) {runif(1, 0, x*0.3)}, data$true_duration)
+  data$failure_status <- ifelse(data$true_duration <= (cut - data$start), 1, 0)
+  data$failure_duration <- ifelse(data$true_duration <= (cut - data$start), data$true_duration, cut - data$start)
+  data$constant <- 1
+
+  
+  par(mfcol = c(1, 2))
+
+  #
+  plot(data$start + data$true_duration, seq(1, nrow(data)),
+       xlim = c(0, max(data$start + data$true_duration)),
+       xlab = "Time (Days)", ylab = "", yaxt = "n",
+       type = "p", cex = 0.8, 
+       pch = ifelse((data$start + data$true_duration) > cut, 1, 4), 
+       col = ifelse((data$start + data$true_duration) > cut, "green", "red"))
+  points(data$start, seq(1, nrow(data)),
+         cex = 0.2, pch = 20, col = "green")
+  abline(v = 0, lty = 2, col = "black")
+  abline(v = cut, lty = 2, col = "blue")
+  segments(data$start, seq(1, nrow(data)), data$start + data$true_duration, seq(1, nrow(data)))
+  
+  
+  #
+  value <- seq(min(data$true_duration), max(data$true_duration), length = 1000)
+  plot(value, exp(- (value/weibull_scale)^weibull_shape), type = "l", col = "blue",
+       xlab = "Time (Days)", ylab = "Survival Probability", main = "")
+  # failure-only
+  data_fail <- data[data$failure_status == 1, ]
+  fit <- fitdistr(data_fail$failure_duration, densfun = "weibull")
+  shape1 <- fit$estimate[1]
+  scale1 <- fit$estimate[2]
+  points(value, exp(- (value/scale1)^shape1), type = "l", col = "black", lty = 2)
+  # Survival model
+  fit <- survreg(as.formula(paste("Surv(failure_duration, failure_status) ~ constant")), data = data)
+  scale2 <- exp(coef(fit)[1])
+  shape2 <- 1/fit$scale
+  points(value, exp(- (value/scale2)^shape2), type = "l", col = "red", lty = 3)
+  #
+  legend("topright", legend = c("Ground Truth", "Failure-Only", "Survival Model"),
+         col = c("blue", "black", "red"), lty = c(1, 2, 3))
+  title(main = paste0("Ground Truth: Shape = ", round(weibull_shape, 2), "; Scale = ", round(weibull_scale, 2), "\n", 
+                     "Failure-Only: Shape = ", round(shape1, 2), "; Scale = ", round(scale1, 2), "\n", 
+                     "Survival Model: Shape = ", round(shape2, 2), "; Scale = ", round(scale2, 2)), 
+        col.main = "blue", cex.main = 0.9)
+
+
+}, width = 1000, height = 600)
+
+
+```
+
+
+
+

@@ -1,0 +1,108 @@
+---
+title: "A 'Simple' Bayesian Demo"
+output: 
+  flexdashboard::flex_dashboard:
+runtime: shiny
+---
+
+
+```{r global, include=FALSE}
+
+options(stringsAsFactors=FALSE)
+while(dev.next()>1) dev.off()
+rm(list=objects())
+gc()
+
+libs <- c("shiny")
+x <- sapply(libs, function(x) {if(!require(x, character.only = T)) install.packages(x)})
+x <- sapply(libs, function(x) {require(x, character.only = T)})
+
+setwd("C:/MyDesktop/_My Notes")
+set.seed(1000)
+
+```
+
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+sliderInput("n", label = "Number of Data Points:",
+            min = 5, max = 200, value = 200, step = 5)
+
+sliderInput("mean", label = "Mean:",
+            min = 10, max = 30, value = 20, step = 1)
+
+sliderInput("sd", label = "Std Dev:",
+            min = 1, max = 10, value = 3, step = 0.5)
+
+sliderInput("prior_mean", label = "Normal Prior, Mean: ",
+            min = 1, max = 50, value = 20, step = 1)
+
+sliderInput("prior_sd", label = "Normal Prior, Std Dev:",
+            min = 0.5, max = 20, value = 5, step = 0.5)
+
+```
+
+
+
+Column
+-----------------------------------------------------------------------
+
+```{r}
+
+renderPlot({
+  
+  par(mfrow = c(1, 2))
+
+  n <- input$n
+  mean <- input$mean
+  sd <- input$sd
+  prior_mean <- input$prior_mean
+  prior_sd <- input$prior_sd
+  x <- rnorm(n, mean = mean, sd = sd)
+  
+  # histogram of x
+  hist(x, probability = T, nclass = 20, border = NA, col = "grey", 
+       xlim = c(mean - 8*sd, mean + 8*sd), ylim = c(0, 1),
+       main = paste0("n = ", n))
+  points(mean, 0, type = "p", pch = 20, col = "red", cex = 2)
+  prior <- function(x) {dnorm(x, mean = prior_mean, sd = prior_sd)}
+  curve(prior, mean - 5*sd, mean + 5*sd, col = "green", lwd = 2, add = T)
+  points(prior_mean, 0, type = "p", pch = 20, col = "green", cex = 1)
+
+  # mean estimation of x
+  plot(mean, 1, type = "p", pch = 20, col = "red", cex = 2, 
+       xlim = c(mean - 4*sd, mean + 4*sd), ylim = c(0, 2), xlab = "",  ylab = "", yaxt = "n",
+       main = "Estimation of Mean")
+  text(mean, 0.5, "Non-Bayesian", col = "blue")
+  text(mean, 1.5, "Bayesian", col = "green")
+  #
+  mean_f <- mean(x)
+  se_f <- sd/sqrt(n)
+  ci_f_lower <- mean_f - qnorm(0.975) * se_f
+  ci_f_upper <- mean_f + qnorm(0.975) * se_f
+  points(mean_f, 0.8, pch = 20, col = "blue")
+  segments(x0 = ci_f_lower, y0 = 0.8, x1 = ci_f_upper, y1 = 0.8, col = "blue")
+  #
+  mean_b <- prior_mean/(1+n*prior_sd**2/sd**2) + mean_f/(1+sd**2/(n*prior_sd**2))
+  se_b <- sqrt(1/(1/prior_sd**2 + n/sd**2))
+  ci_b_lower <- mean_b - qnorm(0.975) * se_b
+  ci_b_upper <- mean_b + qnorm(0.975) * se_b
+  points(mean_b, 1.2, pch = 20, col = "green")
+  segments(x0 = ci_b_lower, y0 = 1.2, x1 = ci_b_upper, y1 = 1.2, col = "green")
+  #
+  title(sub = paste0("Bayesian CI is ", round(2*qnorm(0.975)*(se_f-se_b), 4), " shorter."))
+  #title(sub = paste0("Bayesian Estimate: ", round(mean_b - mean_f, 4), ";\n Bayesian CI: ", round(2*qnorm(0.975)*(se_b-se_f), 4)))
+  
+}, width = 1000, height = 400)
+
+```
+
+
+
+
+
+
+
+
